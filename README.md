@@ -14,3 +14,5 @@ AI Therapist is an empathetic conversational AI application designed to provide 
 - Flask
 - OpenAI Python Library
 - python-dotenv
+
+![alt text](image.png)
