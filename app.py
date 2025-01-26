@@ -1,41 +1,81 @@
-from flask import Flask, request, jsonify
-from openai import OpenAI
+from flask import Flask, request, jsonify, render_template, send_from_directory
+from flask_cors import CORS
 import os
+import logging
+import traceback
+import json
 from dotenv import load_dotenv
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file
 load_dotenv()
 
-# Print environment variable for debugging
-print("OPENAI_API_KEY:", os.getenv("OPENAI_API_KEY"))
+app = Flask(__name__, static_folder='.', static_url_path='')
+CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all routes
 
-# Explicitly check for API key
-api_key = os.getenv("OPENAI_API_KEY")
-if not api_key:
-    raise ValueError("No OpenAI API key found. Please set OPENAI_API_KEY in .env file.")
+# Mock response function
+def get_ai_response(message):
+    responses = [
+        "I understand you're feeling stressed. It's normal to experience stress, and recognizing it is the first step towards managing it effectively.",
+        "Thank you for sharing. Can you tell me more about what's been on your mind lately?",
+        "It sounds like you're going through a challenging time. Remember, your feelings are valid.",
+        "Talking about your emotions is a great way to process them. I'm here to listen without judgment.",
+        "Every challenge is an opportunity for growth. Let's explore your thoughts together."
+    ]
+    import random
+    return random.choice(responses)
 
-# Use environment variable for API key
-client = OpenAI(api_key=api_key)
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-app = Flask(__name__)
-
-# OpenAI API Key
-
-@app.route("/chat", methods=["POST"])
+@app.route("/chat", methods=["POST", "OPTIONS"])
 def chat():
-    user_message = request.json.get("message")
-    if not user_message:
-        return jsonify({"error": "Message is required"}), 400
+    # Handle CORS preflight request
+    if request.method == 'OPTIONS':
+        response = app.make_default_options_response()
+        return response
 
-    # GPT API call
-    response = client.chat.completions.create(model="gpt-3.5-turbo",
-    messages=[
-        {"role": "system", "content": "You are a kind and empathetic therapist. Help users feel heard and understood."},
-        {"role": "user", "content": user_message},
-    ])
+    try:
+        # Log incoming request details
+        logger.debug(f"Received request method: {request.method}")
+        logger.debug(f"Received request data: {request.data}")
 
-    reply = response.choices[0].message.content
-    return jsonify({"reply": reply})
+        # Safely parse JSON
+        try:
+            request_data = request.get_json(force=True)
+        except Exception as json_error:
+            logger.error(f"JSON parsing error: {json_error}")
+            return jsonify({"error": "Invalid JSON"}), 400
+
+        user_message = request_data.get("message")
+        if not user_message:
+            logger.error("No message provided")
+            return jsonify({"error": "Message is required"}), 400
+
+        # Get AI response (mock for now)
+        ai_response = get_ai_response(user_message)
+        
+        logger.debug(f"Sending response: {ai_response}")
+        return jsonify({
+            "response": ai_response
+        })
+    
+    except Exception as e:
+        # Log the full error traceback
+        logger.error(f"Error processing chat request: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            "error": f"An unexpected error occurred: {str(e)}"
+        }), 500
+
+# Serve static files
+@app.route('/<path:path>')
+def serve_static(path):
+    return send_from_directory('.', path)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)
