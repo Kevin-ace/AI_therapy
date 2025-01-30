@@ -15,4 +15,4 @@ AI Therapist is an empathetic conversational AI application designed to provide 
 - OpenAI Python Library
 - python-dotenv
 
-![alt text](image.png)
+![alt text](image-1.png)

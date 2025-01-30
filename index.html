@@ -3,25 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Therapist</title>
+    <title>Aria - Your AI Therapist</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>AI Therapist</h1>
-    <textarea id="userInput" placeholder="How are you feeling today?"></textarea><br>
-    <button onclick="sendMessage()">Send</button>
-    <p id="response"></p>
-
-    <script>
-        async function sendMessage() {
-            const message = document.getElementById("userInput").value;
-            const response = await fetch("http://127.0.0.1:5000/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message }),
-            });
-            const data = await response.json();
-            document.getElementById("response").innerText = data.reply || "Error!";
-        }
-    </script>
+    <div class="container">
+        <div class="chat-header">
+            <h1>Aria - Your AI Therapist</h1>
+        </div>
+        <div class="chat-description">
+            <p>A compassionate AI companion to support your emotional well-being</p>
+        </div>
+        <textarea id="userInput" placeholder="Share your thoughts and feelings..."></textarea>
+        <button id="sendButton">Send Message</button>
+        <div id="response"></div>
+    </div>
+    <script src="script.js"></script>
 </body>
 </html>
