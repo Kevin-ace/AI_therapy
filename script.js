@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const userInput = document.getElementById('userInput');
     const sendButton = document.getElementById('sendButton');
     const responseElement = document.getElementById('response');
+    const aiServiceSelect = document.getElementById('ai-service-select');
 
     // Generate a unique user ID
     const getUserId = () => {
@@ -33,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function sendMessage() {
         const message = userInput.value.trim();
+        const aiService = aiServiceSelect.value;
 
         // Input validation
         if (!message) {
@@ -53,7 +55,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 body: JSON.stringify({ 
                     message: message,
-                    user_id: getUserId()
+                    user_id: getUserId(),
+                    service: aiService
                 })
             });
 

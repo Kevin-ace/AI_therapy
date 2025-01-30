@@ -84,3 +84,24 @@ body {
 .error {
     color: #d9534f;
 }
+
+.ai-service-selector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 15px;
+    gap: 10px;
+}
+
+.ai-service-selector label {
+    color: var(--secondary-color);
+    font-weight: 500;
+}
+
+.ai-service-selector select {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background-color: white;
+    font-family: 'Roboto', sans-serif;
+}

@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, render_template, send_from_directory, Response
 from flask_cors import CORS
 from openai import OpenAI
+import anthropic
 import os
 import logging
 import json
@@ -19,42 +20,87 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
-# API Key Fallback Mechanism
-API_KEYS = [
-    os.getenv("OPENAI_API_KEY"),  # Primary OpenAI API key
-    os.getenv("GITHUB_TOKEN"),    # GitHub token from .env
-]
+# AI Service Configuration
+class AIServiceManager:
+    def __init__(self):
+        self.services = {
+            'openai': {
+                'api_key': os.getenv("OPENAI_API_KEY"),
+                'client': None,
+                'create_method': self._create_openai_response
+            },
+            'claude': {
+                'api_key': os.getenv("CLAUDE_API_KEY"),
+                'client': None,
+                'create_method': self._create_claude_response
+            }
+        }
+        self._initialize_clients()
 
-# Remove None values and strip whitespace
-API_KEYS = [key.strip() for key in API_KEYS if key]
+    def _initialize_clients(self):
+        # Initialize OpenAI client
+        if self.services['openai']['api_key']:
+            self.services['openai']['client'] = OpenAI(
+                api_key=self.services['openai']['api_key']
+            )
+        
+        # Initialize Claude client
+        if self.services['claude']['api_key']:
+            self.services['claude']['client'] = anthropic.Anthropic(
+                api_key=self.services['claude']['api_key']
+            )
 
-class APIKeyRotator:
-    def __init__(self, keys):
-        self.keys = keys
-        self.current_key_index = 0
-        self.failed_keys = set()
+    def _create_openai_response(self, client, messages, stream=True):
+        return client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            max_tokens=300,
+            temperature=0.7,
+            top_p=0.9,
+            stream=stream
+        )
 
-    def get_next_key(self):
-        if not self.keys:
-            raise ValueError("No API keys available")
+    def _create_claude_response(self, client, messages, stream=True):
+        # Convert messages to Claude's format
+        claude_messages = []
+        for msg in messages:
+            if msg['role'] == 'system':
+                system_prompt = msg['content']
+            elif msg['role'] in ['user', 'assistant']:
+                claude_messages.append({
+                    'role': msg['role'],
+                    'content': msg['content']
+                })
 
-        # If all keys have failed, reset
-        if len(self.failed_keys) == len(self.keys):
-            self.failed_keys.clear()
+        # Claude doesn't natively support streaming, so we'll simulate it
+        response = client.messages.create(
+            model="claude-2.1",
+            max_tokens=300,
+            system=system_prompt,
+            messages=claude_messages
+        )
+        
+        # Simulate streaming by yielding character by character
+        def stream_claude_response():
+            for char in response.content[0].text:
+                yield char
 
-        # Rotate through available keys
-        while True:
-            key = self.keys[self.current_key_index]
-            self.current_key_index = (self.current_key_index + 1) % len(self.keys)
-            
-            if key not in self.failed_keys:
-                return key
+        return stream_claude_response()
 
-    def mark_key_as_failed(self, key):
-        self.failed_keys.add(key)
+    def get_ai_response(self, messages, service='openai', stream=True):
+        service_config = self.services.get(service)
+        
+        if not service_config or not service_config['client']:
+            raise ValueError(f"No client available for {service}")
 
-# Initialize API key rotator
-api_key_rotator = APIKeyRotator(API_KEYS)
+        return service_config['create_method'](
+            service_config['client'], 
+            messages, 
+            stream
+        )
+
+# Initialize AI Service Manager
+ai_service_manager = AIServiceManager()
 
 # Conversation history storage (in-memory, replace with database in production)
 conversation_history = {}
@@ -93,6 +139,7 @@ def chat():
 
         user_id = data.get('user_id', 'default_user')
         user_message = data['message'].strip()
+        ai_service = data.get('service', 'openai')  # Default to OpenAI
 
         # Initialize or retrieve conversation history
         if user_id not in conversation_history:
@@ -110,60 +157,40 @@ def chat():
         if len(conversation_history[user_id]) > 10:
             conversation_history[user_id] = conversation_history[user_id][-10:]
 
-        # Try with multiple API keys
-        max_retries = len(API_KEYS)
-        for attempt in range(max_retries):
-            try:
-                # Get next available API key
-                current_api_key = api_key_rotator.get_next_key()
-                
-                # Initialize client with current key
-                client = OpenAI(api_key=current_api_key)
+        # Get AI response
+        response = ai_service_manager.get_ai_response(
+            conversation_history[user_id], 
+            service=ai_service
+        )
 
-                # OpenAI API call
-                response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=conversation_history[user_id],
-                    max_tokens=300,
-                    temperature=0.7,
-                    top_p=0.9,
-                    stream=True
-                )
+        # Prepare to stream response
+        def generate():
+            full_response = ""
+            
+            # Handle different streaming behaviors
+            if ai_service == 'claude':
+                for char in response:
+                    full_response += char
+                    yield f"data: {json.dumps({'content': char})}\n\n"
+            else:
+                for chunk in response:
+                    if chunk.choices[0].delta.content:
+                        content = chunk.choices[0].delta.content
+                        full_response += content
+                        yield f"data: {json.dumps({'content': content})}\n\n"
+            
+            # Add AI response to conversation history
+            conversation_history[user_id].append({
+                "role": "assistant", 
+                "content": full_response
+            })
 
-                # Prepare to stream response
-                def generate():
-                    full_response = ""
-                    for chunk in response:
-                        if chunk.choices[0].delta.content:
-                            content = chunk.choices[0].delta.content
-                            full_response += content
-                            yield f"data: {json.dumps({'content': content})}\n\n"
-                    
-                    # Add AI response to conversation history
-                    conversation_history[user_id].append({
-                        "role": "assistant", 
-                        "content": full_response
-                    })
-
-                return Response(generate(), mimetype='text/event-stream')
-
-            except Exception as api_error:
-                logger.error(f"API Error with key: {current_api_key}. Error: {str(api_error)}")
-                
-                # Mark the current key as failed
-                api_key_rotator.mark_key_as_failed(current_api_key)
-                
-                # If it's the last attempt, raise the error
-                if attempt == max_retries - 1:
-                    raise
-
-                # Wait a bit before retrying
-                time.sleep(1)
+        return Response(generate(), mimetype='text/event-stream')
 
     except Exception as e:
         logger.error(f"Chat error: {str(e)}")
         return jsonify({
-            "error": "All API keys have been exhausted. Please try again later.",
+            "error": "An error occurred while processing your request.",
             "details": str(e)
         }), 500
 
