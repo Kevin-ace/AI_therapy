@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 # Load environment variables from .env file
 load_dotenv()
 
-app = Flask(__name__, static_folder='.', static_url_path='')
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all routes
 
 # Mock response function

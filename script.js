@@ -3,10 +3,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const userInput = document.getElementById('user-input');
     const sendBtn = document.getElementById('send-btn');
 
-    function addMessage(content, sender) {
+    function addMessage(content, sender, isError = false) {
         console.log(`Adding ${sender} message:`, content);
         const messageElement = document.createElement('div');
         messageElement.classList.add('message', `${sender}-message`);
+        if (isError) {
+            messageElement.classList.add('error-message');
+        }
         messageElement.textContent = content;
         chatMessages.appendChild(messageElement);
         chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -53,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .catch(error => {
                 console.error('Full error details:', error);
-                addMessage(`Error: ${error.message}`, 'ai');
+                addMessage(`Sorry, there was a problem connecting to the AI. Please try again later.`, 'ai', true);
             });
 
             // Clear input
